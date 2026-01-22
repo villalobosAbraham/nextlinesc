@@ -3,6 +3,7 @@ import { DataSource } from "typeorm";
 import { User } from "./modules/users/user.entity";
 import { Status } from "./modules/status/status.entity";
 import { Task } from "./modules/tasks/task.entity";
+import { Log } from "./modules/logs/log.entity";
 
 export const AppDataSource = new DataSource({
     type: "mysql",
@@ -13,5 +14,5 @@ export const AppDataSource = new DataSource({
     database: process.env.MYSQLDATABASE,
     synchronize: true, // solo en desarrollo
     logging: false,
-    entities: [User, Status, Task],
+    entities: [User, Status, Task, Log],
 })

@@ -3,7 +3,15 @@ import { AppDataSource } from '../../data-source'
 import { Task } from './task.entity'
 import { User } from '../users/user.entity'
 import { Status } from '../status/status.entity'
+import { createLog } from '../logs/log.service'
 
+/**
+ * Crear una nueva tarea
+ * @route POST /tasks
+ * @header {number} x-user-id - ID del usuario que crea la tarea
+ * @returns Tarea creada
+ * @
+ */
 export const createTask = async (req: Request, res: Response) => {
   try {
     let {
@@ -11,16 +19,18 @@ export const createTask = async (req: Request, res: Response) => {
       description,
       dueDate,
       coments,
-      userId,
-      statusId
+      statusId,
+      isPublic = true
     } = req.body
+
+    let userId = Number(req.header('x-user-id'))
 
     const taskRepo = AppDataSource.getRepository(Task)
     const userRepo = AppDataSource.getRepository(User)
     const statusRepo = AppDataSource.getRepository(Status)
 
     // Validación mínima (bien vista en la prueba)
-    if (!title || !description || !dueDate || !statusId) {
+    if (!title || !description || !dueDate || !statusId || isNaN(Date.parse(dueDate)) || isNaN(userId)) {
       return res.status(400).json({
         message: 'Faltan campos obligatorios'
       })
@@ -45,49 +55,88 @@ export const createTask = async (req: Request, res: Response) => {
       dueDate,
       coments,
       status,
-      user: user ?? undefined
+      user: user ?? undefined,
+      isPublic
     })
 
-    await taskRepo.save(task)
+    let savedTask = await taskRepo.save(task)
 
-    res.status(201).json(task)
+    await createLog('CREATE','Task', savedTask.id, `Tarea creada: ${savedTask.title}`)
+
+    res.status(201).json(savedTask)
 
   } catch (error) {
     res.status(500).json({ message: 'Error al crear la tarea' })
   }
 }
 
+/**
+ * Obtener informacion breve de todas las tareas
+ * @route GET /tasks
+ * @header {number} x-user-id - ID del usuario que realiza la consulta
+ * @returns Lista de tareas con información resumida
+ */
 export const getTasks = async (req: Request, res: Response) => {
+  let userId = Number(req.header('x-user-id'))
+
   const repo = AppDataSource.getRepository(Task)
-  let tasks = await repo.find({
-    select: {
-      title: true,
-      dueDate: true,
-      user: {
-        usuario: true
-      },
-      status: {
-        name: true
-      },
-    },
-    relations: {
-      status: true,
-      user: true
-    }
+
+  let tasks = await repo
+    .createQueryBuilder('task')
+    .leftJoinAndSelect('task.status', 'status')
+    .leftJoinAndSelect('task.user', 'user')
+    .where('task.isDeleted = false')
+    .andWhere(
+      '(task.isPublic = true OR task.user = :userId)',
+      { userId }
+    )
+    .select([
+      'task.id',
+      'task.title',
+      'task.dueDate',
+      'status.name',
+      'user.usuario'
+    ])
+    .getMany()
+
+  res.json({
+    count: tasks.length,
+    data: tasks
   })
-  res.status(200).json(tasks)
 }
 
+
+/**
+ * Obtener toda la información de una tarea por su ID
+ * @route GET /tasks/:id
+ * @header {number} x-user-id - ID del usuario que realiza la consulta
+ * @returns Tarea con toda su información
+ */
 export const getTaskById = async (req: Request, res: Response) => {
   let { id } = req.params
   let repo = AppDataSource.getRepository(Task)
-  let task = await repo.findOne({
-  where: { id: Number(id) },
-  relations: {
-    status: true,
-    user: true
-    }
-  })
+  // let task = await repo.findOne({
+  // where: { id: Number(id) },
+  // relations: {
+  //   status: true,
+  //   user: true
+  //   }
+  // })
+
+  let userId = Number(req.header('x-user-id'))
+
+  let task = await repo
+    .createQueryBuilder('task')
+    .leftJoinAndSelect('task.status', 'status')
+    .leftJoinAndSelect('task.user', 'user')
+    .where('task.isDeleted = false')
+    .andWhere(
+      '(task.isPublic = true OR task.user = :userId)',
+      { userId }
+    ).andWhere('task.id = :id', { id: Number(id) })
+    .getOne()
+
+
   if (!task) {
     return res.status(404).json({ message: 'Tarea no encontrada' })
   }
@@ -116,6 +165,11 @@ const applyTaskUpdates = async (task: Task, data: any) => {
   }
 }
 
+/**
+ * Reemplazar toda la información de una tarea por su ID
+ * @route PUT /tasks/:id
+ * @returns Tarea actualizada completa
+ */
 export const replaceTask = async (req: Request, res: Response) => {
   try {
     let requiredFields = ['title', 'description', 'dueDate', 'statusId', 'userId']
@@ -137,6 +191,13 @@ export const replaceTask = async (req: Request, res: Response) => {
     await applyTaskUpdates(task, req.body)
     await taskRepo.save(task)
 
+    await createLog(
+      'UPDATE',
+      'Task',
+      task.id,
+      'Tarea actualizada'
+    )
+
     res.json(task)
   } catch (error: any) {
     if (error.message === 'STATUS_NOT_FOUND') {
@@ -149,6 +210,11 @@ export const replaceTask = async (req: Request, res: Response) => {
   }
 }
 
+/**
+ * Reemplazar parte de la información de una tarea por su ID
+ * @route PATCH /tasks/:id
+ * @returns Tarea actualizada parcialmente
+ */
 export const updateTask = async (req: Request, res: Response) => {
   try {
     const taskRepo = AppDataSource.getRepository(Task)
@@ -168,6 +234,13 @@ export const updateTask = async (req: Request, res: Response) => {
         status: true
       }
     })
+
+    await createLog(
+      'UPDATE',
+      'Task',
+      task?.id || 0,
+      'Tarea actualizada'
+    )
     res.json(task)
   } catch (error: any) {
     if (error.message === 'STATUS_NOT_FOUND') {
@@ -180,18 +253,30 @@ export const updateTask = async (req: Request, res: Response) => {
   }
 }
 
+/** * Eliminar una tarea por su ID
+ * @route DELETE /tasks/:id
+ * @returns No content
+ */
 export const deleteTask = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params
+    let { id } = req.params
     const repo = AppDataSource.getRepository(Task)
 
-    const task = await repo.findOneBy({ id: Number(id) })
+    let task = await repo.findOneBy({ id: Number(id) })
 
     if (!task) {
       return res.status(404).json({ message: 'Tarea no encontrada' })
     }
 
-    await repo.remove(task)
+    task.isDeleted = true
+    await repo.save(task)
+    
+    await createLog(
+      'DELETE',
+      'Task',
+      task.id,
+      `Tarea eliminada`
+    )
 
     res.status(204).send()
   } catch (error) {

@@ -24,4 +24,10 @@ export class Task {
 
   @ManyToOne(() => Status)
   status!: Status
+
+  @Column({ default: true }) 
+  isPublic!: boolean
+
+  @Column({ default: false })
+  isDeleted: boolean = false
 }
