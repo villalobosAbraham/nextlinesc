@@ -7,11 +7,11 @@ import { Log } from "./modules/logs/log.entity";
 
 export const AppDataSource = new DataSource({
     type: "mysql",
-    host: process.env.MYSQLHOST,
+    host: process.env.MYSQLHOST || 'localhost',
     port: parseInt(process.env?.MYSQLPORT || "3306"),
-    username: process.env.MYSQLUSER,
-    password: process.env.MYSQLPASSWORD,
-    database: process.env.MYSQLDATABASE,
+    username: process.env.MYSQLUSER || 'root',
+    password: process.env.MYSQLPASSWORD || '',
+    database: process.env.MYSQLDATABASE || 'pruebanextline',
     synchronize: true, // solo en desarrollo
     logging: false,
     entities: [User, Status, Task, Log],
