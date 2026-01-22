@@ -71,17 +71,23 @@ export const createTask = async (req: Request, res: Response) => {
 }
 
 /**
- * Obtener informacion breve de todas las tareas
+ * Obtener informacion breve de todas las tareas (paginado)
  * @route GET /tasks
  * @header {number} x-user-id - ID del usuario que realiza la consulta
- * @returns Lista de tareas con información resumida
+ * @query {number} page - Página actual (default 1)
+ * @query {number} limit - Registros por página (default 10)
+ * @returns Lista paginada de tareas
  */
 export const getTasks = async (req: Request, res: Response) => {
   let userId = Number(req.header('x-user-id'))
 
+  let page = Number(req.query.page) || 1
+  let limit = Number(req.query.limit) || 10
+  let skip = (page - 1) * limit
+
   const repo = AppDataSource.getRepository(Task)
 
-  let tasks = await repo
+  let [tasks, total] = await repo
     .createQueryBuilder('task')
     .leftJoinAndSelect('task.status', 'status')
     .leftJoinAndSelect('task.user', 'user')
@@ -97,10 +103,15 @@ export const getTasks = async (req: Request, res: Response) => {
       'status.name',
       'user.usuario'
     ])
-    .getMany()
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount()
 
   res.json({
-    count: tasks.length,
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
     data: tasks
   })
 }
