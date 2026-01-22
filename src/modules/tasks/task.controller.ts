@@ -61,7 +61,7 @@ export const createTask = async (req: Request, res: Response) => {
 
     let savedTask = await taskRepo.save(task)
 
-    await createLog('CREATE','Task', savedTask.id, `Tarea creada: ${savedTask.title}`)
+    await createLog('CREATE','Task', savedTask.id, userId, `Tarea creada: ${savedTask.title}`)
 
     res.status(201).json(savedTask)
 
@@ -199,6 +199,8 @@ export const replaceTask = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Tarea no encontrada' })
     }
 
+    let userId = Number(req.header('x-user-id'))
+
     await applyTaskUpdates(task, req.body)
     await taskRepo.save(task)
 
@@ -206,6 +208,7 @@ export const replaceTask = async (req: Request, res: Response) => {
       'UPDATE',
       'Task',
       task.id,
+      userId,
       'Tarea actualizada'
     )
 
@@ -246,10 +249,13 @@ export const updateTask = async (req: Request, res: Response) => {
       }
     })
 
+    let userId = Number(req.header('x-user-id'))
+
     await createLog(
       'UPDATE',
       'Task',
       task?.id || 0,
+      userId,
       'Tarea actualizada'
     )
     res.json(task)
@@ -281,11 +287,14 @@ export const deleteTask = async (req: Request, res: Response) => {
 
     task.isDeleted = true
     await repo.save(task)
+
+    let userId = Number(req.header('x-user-id'))
     
     await createLog(
       'DELETE',
       'Task',
       task.id,
+      userId,
       `Tarea eliminada`
     )
 

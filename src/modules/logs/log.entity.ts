@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm'
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm'
+import { User } from '../users/user.entity'
 
 @Entity()
 export class Log {
@@ -13,6 +14,9 @@ export class Log {
 
   @Column()
   entityId!: number // ID de la tarea
+
+  @ManyToOne(() => User)
+  user!: User
 
   @Column({ nullable: true })
   description?: string
